@@ -2,6 +2,10 @@
 import pygad  # Libreria open-source para Algorítmos genéticos en python
 import numpy as np        # Libreria para hacer operaciones matemáticas
 import argparse
+from scipy.optimize import root
+
+lower_coefficient_value = 1
+upper_coefficient_value = 256
 
 
 # This was building from instructions cycles delay
@@ -21,8 +25,8 @@ def funDelay(var):
 
 
 def auxVariableNumbers(TbusTimes, n):
-    lowerVariableNumbers = np.zeros(n, dtype=int)
-    upperVariableNumbers = np.ones(n, dtype=int)*256
+    lowerVariableNumbers = np.ones(n, dtype=int)*lower_coefficient_value
+    upperVariableNumbers = np.ones(n, dtype=int)*upper_coefficient_value
 
     if TbusTimes < funDelay(lowerVariableNumbers):
         return n-1
@@ -37,6 +41,40 @@ def variableNumbers(TbusTimes):
     Calculate how may variables we need
     '''
     return auxVariableNumbers(TbusTimes, 1)
+
+
+def auxOptFunctionDelay(y, position, coefficientFloat, TbusTimes):
+    coefficientFloat[position] = y
+    return TbusTimes-funDelay(coefficientFloat)
+
+
+def optFunDelay(coefficient, TbusTimes):
+    # To obtain exactly root
+    coefficientFloat = coefficient.astype(float)
+    coefficientSort = np.sort(coefficient)
+    positionArrayBeforeSort = np.zeros_like(coefficient)
+
+    # know the positions of lower until upper
+    for i in range(coefficient.size):
+        index = np.nonzero(coefficient == coefficientSort[i])[0][0]
+        positionArrayBeforeSort[i] = index
+
+    # print(f"positionArrayBeforeSort: {positionArrayBeforeSort}")
+    for pos in positionArrayBeforeSort:
+        sol = root(auxOptFunctionDelay, coefficientFloat[pos],
+                   args=(pos, coefficientFloat, TbusTimes))
+        print(f"sol : {sol.x}")
+
+        if sol.x > upper_coefficient_value:
+            coefficientFloat[pos] = upper_coefficient_value
+        elif sol.x < lower_coefficient_value:
+            coefficientFloat[pos] = lower_coefficient_value
+        else:
+            if pos == positionArrayBeforeSort[-1]:
+                coefficientFloat[pos] = np.floor(sol.x)
+            else:
+                coefficientFloat[pos] = np.around(sol.x)
+    return coefficientFloat
 
 
 # https://www.phind.com/
@@ -77,8 +115,8 @@ num_genes = variableNumbers(TbusTimes)
 num_generations = 1000*(num_genes)
 num_parents_mating = 4
 
-init_range_low = 1
-init_range_high = 256
+init_range_low = lower_coefficient_value
+init_range_high = upper_coefficient_value
 
 parent_selection_type = "sss"
 keep_parents = 1
@@ -115,3 +153,19 @@ prediction = funDelay(solution)
 print(f"Predicted output based on the best solution : {prediction} [# Tbus]")
 print(f"Need - Predicted: {TbusTimes-prediction} [# Tbus]")
 print(f"Final delay time : {prediction*Tbus} [s]")
+
+
+# Optimization
+
+print("\n\nOptimization\n")
+
+optCoefficient = optFunDelay(solution, TbusTimes).astype(int)
+prediction = funDelay(optCoefficient)
+print(f"optCoefficient : {optCoefficient}")
+print(f"Predicted: {prediction} [# Tbus]")
+print(f"Need - Predicted: {TbusTimes-prediction} [# Tbus]")
+print(f"Final delay time : {prediction*Tbus} [s]")
+print(f"Relative error [%] :{(args.delay-prediction*Tbus)*100/args.delay}")
+
+# Thank to
+# https://www.phind.com
